@@ -6,13 +6,22 @@ library(tibble)
 library(viridis)
 library(tidyr)
 library(stringr)
+library(RColorBrewer)
+library(shinyWidgets)
+
+COLORS <- rownames(brewer.pal.info)
 
 options(shiny.maxRequestSize = 30 * 1024 ^ 2)  # max-csv upload set to 30 MB
 
-ui <- fluidPage(h1("Heatmap Monstrosity"),
+ui <- fluidPage(
+  h1(style="font-family:impact;font-size:300%","The Heaping Heatmap Helper"),
                 
+              
                 sidebarLayout(
                   sidebarPanel(
+                   
+                    h3("Provide Data Here"),
+                     wellPanel(style = "background:lightblue;border-width:thick;border-color:black",
                     # Counts file
                     fileInput(
                       inputId = "file1",
@@ -25,17 +34,24 @@ ui <- fluidPage(h1("Heatmap Monstrosity"),
                       inputId = "file2",
                       label = "Upload meta .csv",
                       accept = c(".csv")
-                    ),
-                    
+                    )
+                  ,
                     
                     # Gene List
                     textAreaInput(
                       inputId = "Anno.genes",
                       label = "Choose a subset of genes",
                       height = 100,
-                    ),
+                    )),
+                  # Start the heatmapping
+                  actionButton("action2", "Start Ungrouped Heatmap",icon=icon("play-circle"),
+                               style='padding:16px; font-size:125%'),
+                  actionButton("action", "Start Grouped Heatmap",icon=icon("play-circle"),
+                               style='padding:16px; font-size:125%'),
+                  
+                  h3("Annotation and Filtering Options"),
                     
-                    
+                    wellPanel(style = "background:lightgreen;border-width:thick;border-color:black",
                     # Reactive dropdown to loaded metadata
                     selectInput(
                       'mydropdown',
@@ -43,10 +59,11 @@ ui <- fluidPage(h1("Heatmap Monstrosity"),
                       choices = 'No choices here yet',
                       multiple = T
                     ),
-                    wellPanel(
+                  
+                  
                       # Filter 1
                       selectInput(
-                        'filter1',
+                        inputId='filter1',
                         label = 'Select if you want to filter for a trait',
                         choices = '',
                         multiple = F
@@ -64,7 +81,7 @@ ui <- fluidPage(h1("Heatmap Monstrosity"),
                         label = "Go ahead and filter subjects by criteria?",
                         choices = c("YES", "NO"),
                         selected = "NO"
-                      )),
+                      ),
                      # Checkbox for rownames
                       checkboxInput(inputId = 'Rows',
                                     label="Row Names?",
@@ -74,13 +91,13 @@ ui <- fluidPage(h1("Heatmap Monstrosity"),
                     checkboxInput(inputId="Col",
                                   label="Column Names?",
                                   value=F,
-                                  width=NULL),
+                                  width=NULL)),
                    
-                     # Start the heatmapping
-                    actionButton("action2", "Start Ungrouped Heatmap"),
-                    actionButton("action", "Start Grouped Heatmap"),
                    
+                  h3("Style and Formatting"),
+                  wellPanel(style = "background:#ffcccb;border-width:thick;border-color:black",
                      # Width of heatmap
+                    setSliderColor(sliderId =c(1,2,3,4),color = c("Black","Black","Black","Black")),
                     sliderInput(inputId="groupWidth",
                                 label="Heatmap Width",min = 10,
                                 
@@ -92,12 +109,26 @@ ui <- fluidPage(h1("Heatmap Monstrosity"),
                                 label="Heatmap Height",
                                 min=10,
                                 max=500,
-                                value=400),
+                                value=400,
+                                
+                                ),
                     
+                    selectInput(inputId="Color",
+                                label="Choose color palette",
+                                choices=c("Default",COLORS),
+                                selected = "Default"
+                    ),
+                    
+                    sliderInput(inputId="Breaks",
+                                label="Choose Color Palette to Adjust Color Breaks",
+                               min=3,max=4,value=1)
+                  ),
                     
                     # Download heatmap
-                    downloadButton("downloadData2", "Download Ungrouped Heatmap"),
-                    downloadButton("downloadData", "Download Grouped Heatmap")
+                    downloadButton("downloadData2", "Download Ungrouped Heatmap",
+                                   style='padding:16px; font-size:100%'),
+                    downloadButton("downloadData", "Download Grouped Heatmap",
+                                   style='padding:16px; font-size:100%')
                     
                     
                   ),
@@ -149,6 +180,33 @@ server <- function(input, output, session) {
       }
     })
   
+  # For colors
+  col.pal <- reactive({if(input$Color=="Default"){colorRampPalette(rev(brewer.pal(n = input$Breaks, name =
+        "RdYlBu")))(100)}else{colorRampPalette(rev(brewer.pal(n=input$Breaks
+                                                ,name= input$Color)))(100)}
+    })
+  
+  observeEvent(input$Color,{if(input$Color=="Default"){
+    updateSliderInput(session, "Breaks", label = "Number of color breaks in heatmap",
+                      min=3,
+                      max=brewer.pal.info %>% filter(rownames(brewer.pal.info) %in% "RdYlBu") 
+                      %>% select(maxcolors) %>% .$maxcolors,
+                      value=7
+    )}
+    else{
+    
+    
+    
+  
+              updateSliderInput(session, "Breaks", label = "Number of color breaks in heatmap",
+                                min=3,
+                                max=brewer.pal.info %>% filter(rownames(brewer.pal.info) %in% input$Color) 
+                               %>% select(maxcolors) %>% .$maxcolors,
+                                value=brewer.pal.info %>% filter(rownames(brewer.pal.info) %in% input$Color) 
+                               %>% select(maxcolors) %>% .$maxcolors
+                             )}
+})           
+    
   
   # Reactive metadata variable
   
@@ -289,6 +347,7 @@ server <- function(input, output, session) {
         scale = "row",
         show_rownames = input$Rows,
         show_colnames = input$Col,
+        color=col.pal()
         cluster_cols = T
       )
     }
@@ -301,6 +360,7 @@ server <- function(input, output, session) {
         annotation_col=if(is.null(input$mydropdown)){NA}else{metaA()},
         show_rownames =input$Rows, 
         show_colnames = input$Col,
+        color=col.pal(),
         cluster_cols = T
       )
     }
@@ -314,6 +374,7 @@ server <- function(input, output, session) {
       scale = "row",
       show_rownames = input$Rows,
       show_colnames = input$Col,
+      color=col.pal(),
       angle_col = 45,
       cluster_cols = T
     )
@@ -331,6 +392,7 @@ server <- function(input, output, session) {
         annotation_col= if(is.null(input$mydropdown)){NA}else{metaA()},
         show_rownames=input$Rows,
         show_colnames = input$Col,
+        color = col.pal(),
         cluster_cols = T
       )
   },width=function(){input$groupWidth},height=function(){input$Height})
