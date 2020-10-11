@@ -1,2 +1,2 @@
 # Heatmap-Monstrosity
-Use user-provided data/metadata files to visualize ungrouped and grouped heatmaps with annotation
+Input data/metadata files to Shiny GUI for highly customizable heatmap data visualization. 
